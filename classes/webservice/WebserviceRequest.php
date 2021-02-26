@@ -352,6 +352,7 @@ class WebserviceRequestCore
             'shop_urls' => ['description' => 'Shop URLs from multi-shop feature', 'class' => 'ShopUrl'],
             'product_customization_fields' => ['description' => 'Customization Field', 'class' => 'CustomizationField'],
             'customizations' => ['description' => 'Customization values', 'class' => 'Customization'],
+            'order_return' => ['description' => 'Order returns', 'class' => 'OrderReturn'],
         ];
         $extra_resources = Hook::exec('addWebserviceResources', ['resources' => $resources], null, true, false);
         if (is_countable($extra_resources) && count($extra_resources)) {
