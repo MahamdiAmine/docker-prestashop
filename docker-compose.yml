@@ -3,6 +3,7 @@ services:
  
   mysql:
     image: mysql:5.7
+    container_name: presta_mysql
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: prestashop
@@ -12,18 +13,10 @@ services:
     ports:
       - "3306:3306"
   
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin
-    ports:
-      -  8080:80
-    env_file:
-      - .env
-    environment:
-      PMA_HOST: mysql
-      VIRTUAL_HOST: phpmyadmin.test  
-  
   app_dev:
     build: .
+    container_name: presta_app
+    tty: true
     environment:
       - VIRTUAL_HOST=prestashop.test
     volumes : 

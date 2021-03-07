@@ -1,14 +1,24 @@
 <?php
 
+
 if (!defined('_PS_VERSION_')) {
     exit;
 }
 
 require_once _PS_MODULE_DIR_ . 'ez_express/includer.php';
 
-class Ez_express extends CarrierModule
+class ez_express extends CarrierModule
 {
     const PREFIX = 'belvg_fcdd_';
+    private $_HOST = 'https://tst2.easy-relay.com';
+    private $_VENDOR_ID = 1150;
+    private $_VENDOR_EMAIL = 'test@prestashop.com';
+    private $_VENDOR_PASSWORD = '0597';
+    private $_SHIPPING_URL_TEMPLATE = '/api/prix/prix_var_acheteur.php?id_vendeur=_VENDOR&wilaya=_STATE&isrelais=0';
+    private $_VALIDATE_DELIVERY_URL = '/api/delivery/api.php?action=validate';
+    private $_ADD_DELIVERY_URL = "/api/delivery/api.php?action=add";
+    private $_PACKAGED_STATE_ID = 3;
+
 
     public $id_carrier;
 
@@ -42,12 +52,12 @@ class Ez_express extends CarrierModule
         $this->description = $this->l('description');
     }
 
-    public function getTemplate($area, $file)
+    protected function getTemplate($area, $file): string
     {
         return 'views/templates/' . $area . '/' . $file;
     }
 
-    public function install()
+    public function install(): bool
     {
         if (parent::install()) {
             foreach ($this->_hooks as $hook) {
@@ -70,7 +80,7 @@ class Ez_express extends CarrierModule
         return FALSE;
     }
 
-    protected function uninstallDB()
+    protected function uninstallDB(): bool
     {
         $sql = array();
 
@@ -85,7 +95,7 @@ class Ez_express extends CarrierModule
         return TRUE;
     }
 
-    protected function installDB()
+    protected function installDB(): bool
     {
         $sql = array();
 
@@ -106,10 +116,10 @@ class Ez_express extends CarrierModule
         return TRUE;
     }
 
-    protected function createCarriers()
+    protected function createCarriers(): bool
     {
         foreach ($this->_carriers as $key => $value) {
-            //Create new carrier
+            //Create own carrier
             $carrier = new Carrier();
             $carrier->name = $key;
             $carrier->active = TRUE;
@@ -125,7 +135,7 @@ class Ez_express extends CarrierModule
             if ($carrier->add()) {
                 $groups = Group::getGroups(true);
                 foreach ($groups as $group) {
-                    Db::getInstance()->autoExecute(_DB_PREFIX_ . 'carrier_group', array(
+                    Db::getInstance()->execute(_DB_PREFIX_ . 'carrier_group', array(
                         'id_carrier' => (int)$carrier->id,
                         'id_group' => (int)$group['id_group']
                     ), 'INSERT');
@@ -163,7 +173,7 @@ class Ez_express extends CarrierModule
         return TRUE;
     }
 
-    protected function deleteCarriers()
+    protected function deleteCarriers(): bool
     {
         foreach ($this->_carriers as $value) {
             $tmp_carrier_id = Configuration::get(self::PREFIX . $value);
@@ -174,7 +184,7 @@ class Ez_express extends CarrierModule
         return TRUE;
     }
 
-    public function uninstall()
+    public function uninstall(): bool
     {
         if (parent::uninstall()) {
             foreach ($this->_hooks as $hook) {
@@ -197,7 +207,7 @@ class Ez_express extends CarrierModule
         return FALSE;
     }
 
-    public function get($url)
+    public function get($url): string
     {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
@@ -212,7 +222,7 @@ class Ez_express extends CarrierModule
         return $result;
     }
 
-    public function post($fields, $url, $cpt = 0)
+    public function post($fields, $url, $cpt = 0): string
     {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
@@ -222,78 +232,89 @@ class Ez_express extends CarrierModule
         curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
         curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($fields));
         //curl_setopt($ch, CURLOPT_TIMEOUT_MS, 1*1000);
+
+
         $result = curl_exec($ch);
         $curl_errno = curl_errno($ch);
         $curl_error = curl_error($ch);
         curl_close($ch);
+
         return $result;
     }
 
     public function hookDisplayOrderConfirmation($params)
     {
-        require_once("config.php");
-        $url = $add_url;
-        $res['tracking_vendor'] = $id_vendeur;
-        $res['email'] = $email;
-        $res['password'] = $password;
+        // prepare the necessary fields
+        $res['tracking_vendor'] = $this->_VENDOR_ID;
+        $res['email'] = $this->_VENDOR_EMAIL;
+        $res['password'] = $this->_VENDOR_PASSWORD;
         $order = $params['order'];
 
         $address = new Address((int)$order->id_address_delivery);
         $res['tracking'] = $order->id;
-        $res['delivery_wilaya'] = $address->id_state;
+        $state = new State((int)$address->id_state);
+        $wilaya = $state->iso_code;
+        $res['delivery_wilaya'] = $wilaya;
         $res['phone1'] = $address->phone;
-        $res['delivery_commune'] = $address->city;
+        // use the postcode for the delivery_commune
+        // $res['delivery_commune'] = $address->postcode;
         $res['delivery_address'] = $address->address1;
         $res['delivery_price'] = (int)$order->total_shipping;
-
-        $res['delivery_wilaya'] = 16;
-        $res['delivery_commune'] = 554;
-        $res['qty'] = 0;
+        $quantity = 0;
         $products = $order->getProducts();
         foreach ($products as $product) {
-
-            $res['qty'] += $product['product_quantity'];
-            // $res['id_product']  = $product['product_reference'] ;
+            $quantity += $product['product_quantity'];
         }
 
+        $res['qty'] = $quantity;
         $res['price'] = (int)$order->total_products - (int)$order->total_discounts;
 
-        //Customer
+        // customer's infos
         $customer = new Customer((int)$order->id_customer);
         $res['client_name'] = $customer->firstname;
         $res['client_first_name'] = $customer->lastname;
         $res['client_email'] = $customer->email;
-        $a = $this->post($res, $url);
+        $res['commentaire'] = 'just for testing';
+        $a = $this->post($res, $this->_HOST . $this->_ADD_DELIVERY_URL);
+
         if (json_decode($a, true)["error_code"] != 0) {
 
         }
 
     }
 
-    public function getOrderShippingCost($params, $shipping_cost)
+    public function getOrderShippingCost($params, $shipping_cost): int
     {
+        // get the delivery price
         require("config.php");
-        $adress = new Address((int)$params->id_address_delivery);
-        $wilaya = $adress->id_state;
-        $wilaya = 16;
+        // get the delivery address from the customer  address
+        $address = new Address((int)$params->id_address_delivery);
+        $state = new State((int)$address->id_state);
+        $wilaya = $state->iso_code;
         if ($wilaya) {
-            // get the delivery price
-            $lien = $racine . "/api/prix/prix_var_acheteur.php?id_vendeur=" . $id_vendeur . "&wilaya=" . $wilaya . "&isrelais=0";
-            $prix = $this->get($lien);
-            if ($prix == intval($prix)) {
-                return $prix;
-            } else {
-                return 1000;
+            // prepare the url
+            $vars = array(
+                '_VENDOR' => $this->_VENDOR_ID,
+                '_STATE' => $wilaya,
+            );
+            $shipping_url = strtr($this->_HOST . $this->_SHIPPING_URL_TEMPLATE, $vars);
+            try {
+                // get the shipping cost
+                $price = $this->get($shipping_url);
+                if ($price == intval($price)) {
+                    return $price;
+                } else {
+                    return 1000;
+                }
+            } catch (Exception $ex) {
+                file_put_contents('exceptions', $ex->getMessage());
             }
-
         } else {
             return 0;
         }
-
-        return 0;
     }
 
-    public function getOrderShippingCostExternal($params)
+    public function getOrderShippingCostExternal($params): int
     {
         return $this->getOrderShippingCost($params, 0);
     }
@@ -313,14 +334,14 @@ class Ez_express extends CarrierModule
 
             $this->smarty->assign('express_delivery_id', 16);
             $this->context->controller->addJS(array($this->_path . 'views/js/ez_express.js',));
-
-
             return $this->display(__FILE__, 'header.tpl');
         }
     }
 
+
     public function hookDisplayAdminOrder($params)
     {
+        echo "hookDisplayAdminOrder";
         $freightDeliveryObj = ez_ez_express::loadByOrderId($params['id_order']);
         $this->context->smarty->assign('ez_express_obj', $freightDeliveryObj);
         return $this->display(__file__, $this->getTemplate('admin', 'productAdminTab.tpl'));
@@ -360,29 +381,46 @@ class Ez_express extends CarrierModule
         //exit();
     }
 
+    // validate the delivery
     public function validateLivraison($order_id)
     {
-        require("config.php");
-        $res['tracking_vendor'] = $id_vendeur;
-        $res['email'] = $email;
-        $res['password'] = $password;
-        $res['tracking'] = $order_id;
-        file_put_contents('log4', 'post::' . var_dump($res));
+        // prepare the required fields
+        $fields['tracking_vendor'] = $this->_VENDOR_ID;
+        $fields['email'] = $this->_VENDOR_EMAIL;
+        $fields['password'] = $this->_VENDOR_PASSWORD;
+        $fields['tracking'] = $order_id;
 
-        $a = $this->post($res, $racine . "/api/delivery/api.php?action=validate");
+        $a = $this->post($fields, $this->_HOST . $this->_VALIDATE_DELIVERY_URL);
     }
 
+    // validate the delivery if the state has been changed to the PACKAGED_STATE
     public function hookActionOrderStatusPostUpdate($params)
     {
-        require("config.php");
+        //  +----------------+--------------------------------------+
+        //  | id_order_state | name                                 |
+        //  +----------------+--------------------------------------+
+        //  |              1 | Awaiting check payment               |
+        //  |              2 | Payment accepted                     |
+        //  |              3 | Processing in progress               |
+        //  |              4 | Shipped                              |
+        //  |              5 | Delivered                            |
+        //  |              6 | Canceled                             |
+        //  |              7 | Refunded                             |
+        //  |              8 | Payment error                        |
+        //  |              9 | On backorder (paid)                  |
+        //  |             10 | Awaiting bank wire payment           |
+        //  |             11 | Remote payment accepted              |
+        //  |             12 | On backorder (not paid)              |
+        //  |             13 | Awaiting Cash On Delivery validation |
+        //  +----------------+--------------------------------------+
+        // require("config.php");
         $newStatus = $params['newOrderStatus']->id;
         $order_id = $params['id_order'];
         $order = new Order((int)$order_id);
-        // var_dump($order_id) ;
-        // die() ;
+
         if (Validate::isLoadedObject($order)) {
             $carrier = new Carrier((int)$order->id_carrier);
-            if ($carrier->external_module_name == 'ez_express' and ($newStatus == $packaged_state_id)) {
+            if ($carrier->external_module_name == 'ez_express' and ($newStatus == $this->_PACKAGED_STATE_ID)) {
                 $this->validateLivraison($order_id);
             }
         }
