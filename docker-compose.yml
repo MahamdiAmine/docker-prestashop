@@ -1,4 +1,4 @@
-version: '2'
+version: '3'
 services:
  
   mysql:
@@ -10,9 +10,13 @@ services:
     volumes:
       - ./.docker/data/mysql/:/var/lib/mysql
       - ./.docker/logs/mysql/:/var/log/mysql
+      - ./db/:/var/log/mysql:/docker-entrypoint-initdb.d/
     ports:
       - "3306:3306"
-  
+    networks:
+      - presta_net
+
+
   app_dev:
     build: .
     container_name: presta_app
@@ -26,3 +30,8 @@ services:
       - 80:80
     links:
       - "mysql"
+    networks:
+      - presta_net
+
+networks:
+  presta_net:

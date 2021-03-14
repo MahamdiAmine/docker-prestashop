@@ -7,9 +7,12 @@ if (!defined('_PS_VERSION_')) {
 
 require_once _PS_MODULE_DIR_ . 'ez_express/includer.php';
 
-class ez_express extends CarrierModule
+class Ez_express extends CarrierModule
 {
     const PREFIX = 'belvg_fcdd_';
+    const GET_REQUESTS_LOG_FILE = 'requests.get.txt';
+    const POST_REQUESTS_LOG_FILE = 'requests.post.txt';
+    const EXCEPTIONS_FILE = 'exceptions.log';
     private $_HOST = 'https://tst2.easy-relay.com';
     private $_VENDOR_ID = 1150;
     private $_VENDOR_EMAIL = 'test@prestashop.com';
@@ -30,7 +33,6 @@ class ez_express extends CarrierModule
         'displayBeforeCarrier',
         'displayShoppingCart',
         'actionOrderStatusPostUpdate',
-
     );
 
     protected $_carriers = array(
@@ -41,10 +43,14 @@ class ez_express extends CarrierModule
     {
         $this->name = 'ez_express';
         $this->tab = 'shipping_logistics';
-        $this->version = '0.6.2';
+        $this->version = '0.1';
         $this->author = 'Easy Relay';
+        $this->author_uri = 'http://easy-relay.com/';
         $this->bootstrap = TRUE;
         $this->module_key = '';
+        $this->description = 'Prestashop module to manage the shipping';
+        $this->description_full = 'prestashop plugIn to handle the shipping the return process';
+        $this->ps_versions_compliancy = array('min' => '1.7.0.0', 'max' => '1.7.7.2');
 
         parent::__construct();
 
@@ -55,6 +61,20 @@ class ez_express extends CarrierModule
     protected function getTemplate($area, $file): string
     {
         return 'views/templates/' . $area . '/' . $file;
+    }
+
+    public function createTabLink(): bool
+    {
+        $tab = new Tab;
+        foreach (Language::getLanguage() as $lang) {
+            $tab->name[$lang['id_lang']] = $this->l('Origin');
+        }
+        $tab->class_name = 'AdminOrigin';
+        $tab->module = $this->name;
+        $tab->id_parent = 0;
+        $tab->add();
+        return true;
+
     }
 
     public function install(): bool
@@ -219,6 +239,7 @@ class ez_express extends CarrierModule
 
         $result = curl_exec($ch);
         curl_close($ch);
+        $this->log_events(self::GET_REQUESTS_LOG_FILE, $url, $result);
         return $result;
     }
 
@@ -232,14 +253,21 @@ class ez_express extends CarrierModule
         curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
         curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($fields));
         //curl_setopt($ch, CURLOPT_TIMEOUT_MS, 1*1000);
-
-
         $result = curl_exec($ch);
         $curl_errno = curl_errno($ch);
         $curl_error = curl_error($ch);
         curl_close($ch);
-
+        $this->log_events(self::POST_REQUESTS_LOG_FILE, $url, $result);
         return $result;
+    }
+
+    private function log_events($filename, $requested_url, $response)
+    {
+        $date = date('m/d/Y h:i:s', time());
+        $fp = fopen($filename, 'a');//opens file in append mode
+        $format = $date . "$$" . $this->_VENDOR_ID . "$$" . $requested_url . "$$" . $response . "\n";
+        fwrite($fp, $format);
+        fclose($fp);
     }
 
     public function hookDisplayOrderConfirmation($params)
@@ -275,11 +303,8 @@ class ez_express extends CarrierModule
         $res['client_first_name'] = $customer->lastname;
         $res['client_email'] = $customer->email;
         $res['commentaire'] = 'just for testing';
-        $a = $this->post($res, $this->_HOST . $this->_ADD_DELIVERY_URL);
+        $this->post($res, $this->_HOST . $this->_ADD_DELIVERY_URL);
 
-        if (json_decode($a, true)["error_code"] != 0) {
-
-        }
 
     }
 
@@ -307,7 +332,7 @@ class ez_express extends CarrierModule
                     return 1000;
                 }
             } catch (Exception $ex) {
-                file_put_contents('exceptions', $ex->getMessage());
+                $this->log_events(self::EXCEPTIONS_FILE, '/', $ex->getMessage());
             }
         } else {
             return 0;
@@ -337,7 +362,6 @@ class ez_express extends CarrierModule
             return $this->display(__FILE__, 'header.tpl');
         }
     }
-
 
     public function hookDisplayAdminOrder($params)
     {
@@ -389,8 +413,7 @@ class ez_express extends CarrierModule
         $fields['email'] = $this->_VENDOR_EMAIL;
         $fields['password'] = $this->_VENDOR_PASSWORD;
         $fields['tracking'] = $order_id;
-
-        $a = $this->post($fields, $this->_HOST . $this->_VALIDATE_DELIVERY_URL);
+        $this->post($fields, $this->_HOST . $this->_VALIDATE_DELIVERY_URL);
     }
 
     // validate the delivery if the state has been changed to the PACKAGED_STATE
@@ -417,14 +440,17 @@ class ez_express extends CarrierModule
         $newStatus = $params['newOrderStatus']->id;
         $order_id = $params['id_order'];
         $order = new Order((int)$order_id);
-
         if (Validate::isLoadedObject($order)) {
             $carrier = new Carrier((int)$order->id_carrier);
             if ($carrier->external_module_name == 'ez_express' and ($newStatus == $this->_PACKAGED_STATE_ID)) {
                 $this->validateLivraison($order_id);
             }
         }
+    }
 
-
+    // display the content for the module configure
+    public function getContent()
+    {
+        return $this->display(__FILE__, 'views/templates/admin/configuration.tpl');
     }
 }

@@ -89,12 +89,12 @@ tests-legacy/resources/modules/referralprogram/
 !/admin-dev/backups/.htaccess
 
 /admin-dev/import/*
-!/admin-dev/import/.htaccess
-!/admin-dev/import/index.php
+#!/admin-dev/import/.htaccess
+#!/admin-dev/import/index.php
 
 /admin-dev/export/*
-!/admin-dev/export/.htaccess
-!/admin-dev/export/index.php
+#!/admin-dev/export/.htaccess
+#!/admin-dev/export/index.php
 
 # Downloaded RTL files
 /admin-dev/themes/default/css/bundle/default_rtl.css
@@ -120,14 +120,14 @@ themes/core.js
 # Config
 
 config/defines_custom.inc.php
-config/settings.inc.php
+#config/settings.inc.php
 config/settings.old.php
 config/xml/*
 config/themes/*
 !config/xml/themes/default.xml
-themes/*/config/settings_*.json
-app/config/parameters.old.yml
-app/config/config.php
+#themes/*/config/settings_*.json
+#app/config/parameters.old.yml
+#app/config/config.php
 
 # Themes, modules and overrides
 
@@ -173,8 +173,8 @@ themes/default-bootstrap/modules/*/mails/*
 /app/Resources/geoip/GeoLite2-City.mmdb
 /app/Resources/translations/*
 !/app/Resources/translations/default
-/app/config/parameters.yml
-/app/config/parameters.php
+#/app/config/parameters.yml
+#/app/config/parameters.php
 /build/
 /phpunit.xml
 /var/*
@@ -188,7 +188,7 @@ themes/default-bootstrap/modules/*/mails/*
 /var/sessions/*
 !var/sessions/.gitkeep
 !var/SymfonyRequirements.php
-/vendor/
+#/vendor/
 /web/bundles/
 
 
