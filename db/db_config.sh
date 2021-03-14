@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-mysql="mysql -u root -h 127.0.0.1"
+mysql="mysql -u root -h 127.0.0.1 -P 3305"
 
 # create a shared role to read & write general datasets into postgres
 echo "Creating database role: metabase"
